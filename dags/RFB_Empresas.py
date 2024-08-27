@@ -3,6 +3,7 @@ from datetime import timedelta,datetime
 from urllib.request import urlopen, urlretrieve
 from bs4 import BeautifulSoup
 from loguru import logger
+import patoolib
 import os
 
 default_args = {
@@ -17,7 +18,8 @@ default_args = {
     dag_id = "rfb_carga",
     default_args=default_args,
     description='DAG que realiza download e carga das informações públicas disponibilizadas pela RFB.',
-    start_date=datetime.datetime(2024,8,19),
+    tags=["RFB","Publico"],
+    start_date=datetime(2024,8,19),
     schedule= "@daily",
     max_consecutive_failed_dag_runs=3,
     catchup=False
@@ -46,10 +48,41 @@ def rfb_dag():
                     end = datetime.now()
                     logger.error(f'Erro ao baixar arquivo: {arquivo}. Tempo de execução: {end-start} segundos')
         return 'Arquivos baixados com sucesso!'
+    
+    @task
+    def descompacta_arquivos():
+        for attr in os.listdir():
+            if (attr.startswith('Empresa') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Empresas"
+            elif (attr.startswith('Cnae') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Cnaes"
+            elif (attr.startswith('Estab') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Estabelecimentos"
+            elif (attr.startswith('Mot') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Motivos"
+            elif (attr.startswith('Muni') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Municipios"
+            elif (attr.startswith('Nat') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Naturezas"
+            elif (attr.startswith('Pai') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Paises"
+            elif (attr.startswith('Qua') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Qualificacoes"
+            elif (attr.startswith('Si') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Simples"
+            elif (attr.startswith('So') and attr.endswith('.zip')):
+                output = "/mnt/c/data/RFB/Socios"
+            else:
+                continue
 
-    # @task(task_id="move_arquivos")
-    # def move_arquivos():
-
-    download_arquivos()
+            try:
+                patoolib.extract_archive(archive=attr,outdir=output)
+                logger.info(f'Arquivo {attr}, extraído com sucesso!')
+            except Exception as e:
+                logger.error(f'Erro {e} ao extrair o arquivo {attr} para {output}.')
+                return f'Erro: {e}, ao processar o arquivo {attr}!'
+        return 'Arquivos processados com sucesso.'
+    
+    download_arquivos() >> descompacta_arquivos()
 
 rfb_dag()
